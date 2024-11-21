@@ -1,0 +1,22 @@
+services:
+  fastapi:
+    build: .
+    restart: always
+    command: python -m src
+    volumes:
+      - .:/app
+    ports:
+      - "8001:8000"
+    depends_on:
+      - db
+
+  db:
+    image: postgres:14
+    restart: always
+    container_name: postgresql
+    env_file: .env
+    volumes:
+      - ./postgresql:/var/lib/postgresql/data
+    ports:
+      - "5431:5432"
+
