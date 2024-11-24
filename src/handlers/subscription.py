@@ -19,18 +19,54 @@ logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 
 @router.get("/available", response_model=SubscriptionResponse)
-def get_available_subscriptions():
-    
-    options = [
-        {"type": sub_type.value, "price": price, "title": sub_type.title}
-        for sub_type, price in [
-            (SubscriptionType.MONTHLY, 199),
-            (SubscriptionType.HALF_YEARLY, 949),
-            (SubscriptionType.YEARLY, 1549),
-            (SubscriptionType.LIFETIME, 9999999),
+def get_available_subscriptions(user_id: int, db: Session = Depends(database.get_db)):
+    """
+    Возвращает список доступных подписок в зависимости от текущей подписки пользователя.
+    """
+    # Получаем пользователя из базы данных
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Проверяем, есть ли у пользователя пожизненная подписка
+    lifetime_payment = (
+        db.query(Payment)
+        .filter(
+            Payment.user_id == user_id,
+            Payment.subscription_type == SubscriptionType.LIFETIME.name
+        )
+        .first()    
+    )
+
+    # Если есть пожизненная подписка, возвращаем только подписку на калькулятор
+    if lifetime_payment:
+        options = [
+            {
+                "type": sub_type.value,
+                "price": sub_type.get_price,
+                "title": sub_type.title,
+            }
+            for sub_type in [
+                SubscriptionType.CALCULATOR,
+            ]
         ]
-    ]
+    else:
+        # Если подписки нет, возвращаем стандартные подписки
+        options = [
+            {
+                "type": sub_type.value,
+                "price": sub_type.get_price,
+                "title": sub_type.title,
+            }
+            for sub_type in [
+                SubscriptionType.MONTHLY,
+                SubscriptionType.HALF_YEARLY,
+                SubscriptionType.YEARLY,
+            ]
+        ]
+
     return {"subscriptions": options}
+
 
 
 
@@ -134,10 +170,21 @@ def confirm_payment(user_id: int, type: str, db: Session = Depends(get_db)):
 
     print(f"User found: {user}")
 
-   
+    try:
+        print("Available subscription types:", [sub_type.value for sub_type in SubscriptionType])
+        sub_type = next((st for st in SubscriptionType if st.value == type.strip()), None)
+        if not sub_type:
+            raise ValueError(f"Invalid subscription type: {type}")
+        print("Parsed subscription type:", sub_type)
+    except ValueError as e:
+        print(e)
+        raise HTTPException(status_code=400, detail=str(e))
+
+    subscription_type_db = sub_type.name
+
     new_payment = Payment(
         user_id=user_id,
-        subscription_type=SubscriptionType(type),
+        subscription_type=subscription_type_db,
         payment_system="prodamus",
         expiration_date=datetime.utcnow() + get_subscription_duration(type),
     )
@@ -166,7 +213,7 @@ def get_subscription_duration(subscription_type: str) -> timedelta:
     elif subscription_type == "yearly":
         return timedelta(days=365)
     elif subscription_type == "lifetime":
-        return None    
+        return timedelta(days=999999)    
     else:
         raise ValueError("Invalid subscription type")
 

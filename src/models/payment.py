@@ -10,6 +10,7 @@ class SubscriptionType(Enum):
     HALF_YEARLY = ("half_yearly", "Полугодовая подписка", 949)
     YEARLY = ("yearly", "Годовая подписка", 1549)
     LIFETIME = ("lifetime", "Пожизненная подписка", 9999999)
+    CALCULATOR = ("calculator", "Подписка на калькулятор", 99)
 
     def __init__(self, value, title, price):
         self._value_ = value
