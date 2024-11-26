@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from src import database
 import uuid
 import requests
+from typing import List
 
 import logging
 logging.basicConfig()
@@ -70,7 +71,7 @@ def get_available_subscriptions(user_id: int, db: Session = Depends(database.get
 
 
 
-@router.get("/status", response_model=SubscriptionStatus)
+@router.get("/status", response_model=List[SubscriptionStatus])
 def get_subscription_status(user_id: int, db: Session = Depends(get_db)):
     
     user = get_user_by_id(db, user_id)
@@ -78,18 +79,28 @@ def get_subscription_status(user_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="User not found")
 
     # Найти активную подписку с датой окончания позже текущего времени
-    active_payment = next(
-        (p for p in user.payments if p.expiration_date and p.expiration_date > datetime.utcnow()), None
+    active_payments = (
+        db.query(Payment)
+        .filter(Payment.user_id == user_id, Payment.expiration_date > datetime.utcnow())
+        .all()
     )
-    if not active_payment:
+    if not active_payments:
         return {"active": False, "expires": None, "type": None}
 
-    
-    return {
-        "active": True,
-        "expires": active_payment.expiration_date.isoformat(),
-        "type": active_payment.subscription_type.value,
-    }
+    subscriptions = []
+    for payment in active_payments:
+        subscriptions.append({
+            "active": True,
+            "type": payment.subscription_type.value,
+            "expires": payment.expiration_date.isoformat() if payment.expiration_date else "Never",
+        })
+
+    return subscriptions
+    # return {
+    #     "active": True,
+    #     "expires": active_payment.expiration_date.isoformat(),
+    #     "type": active_payment.subscription_type.value,
+    # }
 
 
 
@@ -206,7 +217,7 @@ def confirm_payment(user_id: int, type: str, db: Session = Depends(get_db)):
 
 
 def get_subscription_duration(subscription_type: str) -> timedelta:
-    if subscription_type == "monthly":
+    if subscription_type == "monthly" or subscription_type == "calculator":
         return timedelta(days=30)
     elif subscription_type == "half_yearly":
         return timedelta(days=182)

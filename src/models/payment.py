@@ -32,7 +32,7 @@ class Payment(Base):
     expiration_date = Column(DateTime, nullable=True)
 
     def set_expiration_date(self):
-        if self.subscription_type == SubscriptionType.MONTHLY:
+        if self.subscription_type == SubscriptionType.MONTHLY or self.subscription_type == SubscriptionType.CALCULATOR:
             self.expiration_date = datetime.utcnow() + timedelta(days=30)
         elif self.subscription_type == SubscriptionType.HALF_YEARLY:
             self.expiration_date = datetime.utcnow() + timedelta(days=182)
