@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 from src.database import get_db
 from src.schemas.subscription import SubscriptionRequest, SubscriptionResponse, SubscriptionStatus, PurchaseResponse, PaymentResponse, CancelSubscriptionRequest
-from src.models.payment import SubscriptionType, Payment
+from src.models.payment import SubscriptionType, Payment, PaymentTracking
 from src.repositories.user import get_user_by_id
 from datetime import datetime
 from src.models.user import User
@@ -11,6 +11,10 @@ from src import database
 import uuid
 import requests
 from typing import List
+from src.utils.yookassa_service import YookassaService
+from src.utils.prodamus_service import ProdamusService
+from fastapi.responses import JSONResponse
+
 
 import logging
 logging.basicConfig()
@@ -73,29 +77,39 @@ def get_available_subscriptions(user_id: int, db: Session = Depends(database.get
 
 @router.get("/status", response_model=List[SubscriptionStatus])
 def get_subscription_status(user_id: int, db: Session = Depends(get_db)):
-    
-    user = get_user_by_id(db, user_id)
+    """
+    Проверяет статус активных подписок пользователя.
+    """
+    # Получаем пользователя
+    user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Найти активную подписку с датой окончания позже текущего времени
+    # Получаем активные подписки пользователя
     active_payments = (
         db.query(Payment)
         .filter(Payment.user_id == user_id, Payment.expiration_date > datetime.utcnow())
         .all()
     )
-    if not active_payments:
-        return {"active": False, "expires": None, "type": None}
 
-    subscriptions = []
-    for payment in active_payments:
-        subscriptions.append({
+    if not active_payments:
+        return JSONResponse(
+            content={"message": "The user has no active subscriptions"}, 
+            status_code=200
+        )
+
+    # Формируем список статусов подписок
+    subscriptions = [
+        {
             "active": True,
-            "type": payment.subscription_type.value,
-            "expires": payment.expiration_date.isoformat() if payment.expiration_date else "Never",
-        })
+            "type": payment.subscription_type.value,  # Приводим Enum к строке
+            "expires": payment.expiration_date.isoformat(),
+        }
+        for payment in active_payments
+    ]
 
     return subscriptions
+
     # return {
     #     "active": True,
     #     "expires": active_payment.expiration_date.isoformat(),
@@ -107,123 +121,166 @@ def get_subscription_status(user_id: int, db: Session = Depends(get_db)):
 
 @router.post("/purchase", status_code=200)
 def purchase_subscription(subscription: SubscriptionRequest, db: Session = Depends(database.get_db)):
-    
+    """
+    Создаёт запрос на покупку подписки.
+    """
     print("Available subscription types:", [sub_type.value for sub_type in SubscriptionType])
     print("Received subscription type:", subscription.type)
 
-    def get_subscription_type(type_value: str) -> SubscriptionType:
-        for sub_type in SubscriptionType:
-            if sub_type.value == type_value:
-                return sub_type
-        raise ValueError(f"Invalid subscription type: {type_value}")
-
-    print("Received subscription type:", subscription.type)
+    # Проверяем и получаем тип подписки
     try:
-        sub_type = get_subscription_type(subscription.type.lower())
+        # Попытка сопоставить строку с Enum
+        sub_type = next((st for st in SubscriptionType if st.value == subscription.type.strip().lower()), None)
+        if not sub_type:
+            raise ValueError(f"Invalid subscription type: {subscription.type}")
         print("Parsed subscription type:", sub_type)
     except ValueError as e:
         print(e)
-        return {"detail": "Invalid subscription type"}
-    
-    ticket_id = uuid.uuid4()
+        raise HTTPException(status_code=400, detail="Invalid subscription type")
 
-   
+    # Проверяем существование пользователя
     user = db.query(User).filter(User.id == subscription.user_id).first()
     if not user:
-        return {"detail": "User not found"}
+        print(f"User with ID {subscription.user_id} not found.")
+        raise HTTPException(status_code=404, detail="User not found")
 
-    
+    # Установка цены и описания
+    price = sub_type.get_price
+    description = f"Подписка {sub_type.title} для VetApp"
+    ticket_id = str(uuid.uuid4())
+
+    # Проверка метода оплаты
+    payment_method = subscription.payment_method.lower()
+    if payment_method not in ["prodamus", "yookassa"]:
+        raise HTTPException(status_code=400, detail="Invalid payment method")
+
+    # Генерация ссылки на оплату и сохранение данных
+    payment_url = None
     try:
-        sub_type = get_subscription_type(subscription.type.lower())  
-        price = sub_type.get_price  
-    except ValueError as e:
-        print(e)  
-        return {"detail": "Invalid subscription type"}
+        if payment_method == "prodamus":
+            # Параметры для ПродаМус
+            payload = {
+                "do": "link",
+                "order_id": ticket_id,
+                "customer_email": user.email,
+                "paid_content": description,
+                "products[0][name]": description,
+                "products[0][quantity]": 1,
+                "products[0][price]": price,
+            }
+            response = requests.get("https://vetapp.payform.ru", params=payload)
+            if response.status_code == 200:
+                payment_url = response.text
+            else:
+                print(f"Prodamus error response: {response.text}")
+                raise Exception("Failed to generate payment URL for Prodamus")
+        elif payment_method == "yookassa":
+            # Создание платежа через Yookassa
+            yookassa = YookassaService()
+            payment_data = yookassa.create_payment(price=price, return_url="https://yourapp.com/payment/success")
+            payment_url = payment_data.get("confirmation_url")
+            if not payment_url:
+                raise Exception("No confirmation URL in Yookassa response")
+    except Exception as e:
+        print(f"Error while creating payment: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate payment URL")
 
-    # Параметры для запроса к платёжной системе
-    payload = {
-        "do": "link",
-        "order_id": ticket_id,
-        "customer_email": user.email,
-        "paid_content": f"Подписка {sub_type.title} для VetApp",
-        "products[0][name]": f"Подписка {sub_type.title}",
-        "products[0][quantity]": 1,
-        "products[0][price]": price,
+    # Сохранение данных в payment_tracking
+    payment_tracking = PaymentTracking(
+        ticket_id=ticket_id,
+        user_id=user.id,
+        subscription_type=sub_type.name,
+        payment_completed=False
+    )
+    db.add(payment_tracking)
+
+    # Сохранение данных в users_payments
+    users_payment = Payment(
+        user_id=user.id,
+        ticket_id=ticket_id,
+        payment_system=payment_method,
+        subscription_type=None,  # Тип подписки будет установлен после успешной оплаты
+        expiration_date=None     # Дата окончания будет установлена после успешной оплаты
+    )
+    db.add(users_payment)
+
+    # Подтверждение изменений в базе данных
+    db.commit()
+
+    # Возврат ссылки на оплату
+    return {
+        "payment_url": payment_url,
+        "success_url": f"https://yourapp.com/payment/success?ticket_id={ticket_id}",
+        "failure_url": f"https://yourapp.com/payment/failure?ticket_id={ticket_id}",
+        "ticket_id": ticket_id
     }
 
-    # Запрос к платёжной системе
-    try:
-        response = requests.get("https://vetapp.payform.ru", params=payload)
-        if response.status_code == 200:
-            # Сохранение информации о платеже в базе данных
-            db.add(Payment(user_id=user.id, ticket_id=ticket_id, payment_system="prodamus"))
-            db.commit()
 
-            # Возврат ссылки на оплату
-            return {
-                "payment_url": response.text,
-                "success_url": f"https://yourapp.com/payment/success?user_id={user.id}&type={subscription.type}",
-                "failure_url": f"https://yourapp.com/payment/failure?user_id={user.id}"
-            }
-    except Exception as e:
-        print(e)
-        return {"detail": "Failed to generate payment URL. Please, try again later."}
 
 
 @router.post("/payment/success")
-def confirm_payment(user_id: int, type: str, db: Session = Depends(get_db)):
-    print(f"Confirm payment called with user_id={user_id}, type={type}")
+def confirm_payment(ticket_id: str, db: Session = Depends(get_db)):
+    """
+    Подтверждает успешную оплату подписки.
+    """
+    # Находим запись платежа в таблице payment_tracking
+    tracking = db.query(PaymentTracking).filter(PaymentTracking.ticket_id == ticket_id).first()
+    if not tracking:
+        raise HTTPException(status_code=404, detail="Tracking record not found")
 
-    user = get_user_by_id(db, user_id)
-    if not user:
-        print(f"User with id={user_id} not found!")
-        raise HTTPException(status_code=404, detail="User not found")
+    # Проверяем, прошла ли уже оплата
+    if tracking.payment_completed:
+        raise HTTPException(status_code=400, detail="Payment already confirmed for this ticket")
 
-    print(f"User found: {user}")
+    # Проверяем существование типа подписки
+    subscription_type = tracking.subscription_type
+    if not subscription_type:
+        raise HTTPException(status_code=400, detail="Subscription type is not set for this ticket")
 
     try:
-        print("Available subscription types:", [sub_type.value for sub_type in SubscriptionType])
-        sub_type = next((st for st in SubscriptionType if st.value == type.strip()), None)
-        if not sub_type:
-            raise ValueError(f"Invalid subscription type: {type}")
-        print("Parsed subscription type:", sub_type)
+        # Используем функцию для получения длительности подписки
+        subscription_duration = get_subscription_duration(subscription_type)
+        expiration_date = datetime.utcnow() + subscription_duration
     except ValueError as e:
-        print(e)
         raise HTTPException(status_code=400, detail=str(e))
 
-    subscription_type_db = sub_type.name
-
-    new_payment = Payment(
-        user_id=user_id,
-        subscription_type=subscription_type_db,
-        payment_system="prodamus",
-        expiration_date=datetime.utcnow() + get_subscription_duration(type),
-    )
+    # Обновляем запись в таблице users_payments
+    payment = db.query(Payment).filter(Payment.ticket_id == ticket_id).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment record not found in users_payments")
     
+    payment.subscription_type = subscription_type
+    payment.expiration_date = expiration_date
 
+    # Обновляем запись в payment_tracking
+    tracking.payment_completed = True
+
+     # Устанавливаем значения is_purchased и is_subscribed для пользователя
+    user = db.query(User).filter(User.id == payment.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
     
-    print(f"Before update: is_purchased={user.is_purchased}, is_subscribed={user.is_subscribed}")
     user.is_purchased = True
     user.is_subscribed = True
-    db.add(new_payment)
     db.add(user)
     db.commit()
-    
-    print(f"After update: is_purchased={user.is_purchased}, is_subscribed={user.is_subscribed}")
-   
 
-    print("Payment confirmed and subscription activated.")
-    return {"detail": "Payment confirmed and subscription activated."}
+    return {
+        "detail": "Payment confirmed and subscription activated",
+        "subscription_type": subscription_type,
+        "expiration_date": expiration_date.isoformat() if expiration_date else "Lifetime"
+    }
+
 
 
 def get_subscription_duration(subscription_type: str) -> timedelta:
-    if subscription_type == "monthly" or subscription_type == "calculator":
+    if subscription_type == "MONTHLY" or subscription_type == "CALCULATOR":
         return timedelta(days=30)
-    elif subscription_type == "half_yearly":
+    elif subscription_type == "HALF_YEARLY":
         return timedelta(days=182)
-    elif subscription_type == "yearly":
+    elif subscription_type == "YEARLY":
         return timedelta(days=365)
-    elif subscription_type == "lifetime":
+    elif subscription_type == "LIFETIME":
         return timedelta(days=999999)    
     else:
         raise ValueError("Invalid subscription type")

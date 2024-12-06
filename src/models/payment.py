@@ -43,3 +43,18 @@ class Payment(Base):
         return (f'Payment ID: {self.id}, User ID: {self.user_id}, '
                 f'Subscription Type: {self.subscription_type}, '
                 f'Expires: {self.expiration_date}')
+
+
+
+class PaymentTracking(Base):
+    __tablename__ = "payment_tracking"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    ticket_id = Column(UUID(as_uuid=True), nullable=False)
+    subscription_type = Column(String, nullable=False)
+    payment_completed = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        # Связь с таблицей users
+    user = relationship("User", back_populates="tracking_payments")

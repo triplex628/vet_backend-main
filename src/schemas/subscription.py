@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import List, Optional
 from pydantic import BaseModel
+from datetime import datetime
 
 class PurchaseResponse(BaseModel):
     payment_url: str
@@ -17,6 +18,7 @@ class SubscriptionResponse(BaseModel):
 class SubscriptionRequest(BaseModel):
     user_id: int
     type: str
+    payment_method: str
 
 class SubscriptionStatus(BaseModel):
     active: bool
@@ -27,7 +29,17 @@ class PaymentResponse(BaseModel):
     payment_url: str
     success_url: str
     failure_url: str
+    ticket_id: str
 
 
 class CancelSubscriptionRequest(BaseModel):
     user_id: int
+
+
+class PaymentSuccessRequest(BaseModel):
+    ticket_id: str
+
+class PaymentSuccessResponse(BaseModel):
+    detail: str
+    subscription_type: str
+    expiration_date: Optional[datetime] 

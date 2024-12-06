@@ -8,3 +8,4 @@ api_router.include_router(user.router, prefix='/users', tags=['User'])
 api_router.include_router(payment.router, prefix='/payments', tags=['Payment'])
 api_router.include_router(drug.router, prefix='/drugs', tags=['Drugs'])
 api_router.include_router(animal.router, prefix='/animals', tags=['Animals'])
+

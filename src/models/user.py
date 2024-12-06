@@ -18,7 +18,7 @@ class User(Base):
     last_code = Column(Integer, nullable=True, default=None)
     drugs = relationship('DrugUser', back_populates='user')
     payments = relationship('Payment', back_populates='user')
-
+    tracking_payments = relationship("PaymentTracking", back_populates="user")
     def __repr__(self):
         return f'User ID:{self.id} Email:{self.email} Active:{self.is_active} Purchased:{self.is_purchased} ' \
                f'Admin:{self.is_admin} '
