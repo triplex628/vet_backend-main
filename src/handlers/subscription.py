@@ -28,12 +28,12 @@ def get_available_subscriptions(user_id: int, db: Session = Depends(database.get
     """
     Возвращает список доступных подписок в зависимости от текущей подписки пользователя.
     """
-    # Получаем пользователя из базы данных
+    
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Проверяем, есть ли у пользователя пожизненная подписка
+   
     lifetime_payment = (
         db.query(Payment)
         .filter(
@@ -43,7 +43,7 @@ def get_available_subscriptions(user_id: int, db: Session = Depends(database.get
         .first()    
     )
 
-    # Если есть пожизненная подписка, возвращаем только подписку на калькулятор
+   
     if lifetime_payment:
         options = [
             {
@@ -56,7 +56,7 @@ def get_available_subscriptions(user_id: int, db: Session = Depends(database.get
             ]
         ]
     else:
-        # Если подписки нет, возвращаем стандартные подписки
+        
         options = [
             {
                 "type": sub_type.value,
@@ -80,12 +80,12 @@ def get_subscription_status(user_id: int, db: Session = Depends(get_db)):
     """
     Проверяет статус активных подписок пользователя.
     """
-    # Получаем пользователя
+    
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Получаем активные подписки пользователя
+    
     active_payments = (
         db.query(Payment)
         .filter(Payment.user_id == user_id, Payment.expiration_date > datetime.utcnow())
@@ -98,11 +98,11 @@ def get_subscription_status(user_id: int, db: Session = Depends(get_db)):
             status_code=200
         )
 
-    # Формируем список статусов подписок
+   
     subscriptions = [
         {
             "active": True,
-            "type": payment.subscription_type.value,  # Приводим Enum к строке
+            "type": payment.subscription_type.value, 
             "expires": payment.expiration_date.isoformat(),
         }
         for payment in active_payments
@@ -110,11 +110,7 @@ def get_subscription_status(user_id: int, db: Session = Depends(get_db)):
 
     return subscriptions
 
-    # return {
-    #     "active": True,
-    #     "expires": active_payment.expiration_date.isoformat(),
-    #     "type": active_payment.subscription_type.value,
-    # }
+  
 
 
 
@@ -127,9 +123,9 @@ def purchase_subscription(subscription: SubscriptionRequest, db: Session = Depen
     print("Available subscription types:", [sub_type.value for sub_type in SubscriptionType])
     print("Received subscription type:", subscription.type)
 
-    # Проверяем и получаем тип подписки
+    
     try:
-        # Попытка сопоставить строку с Enum
+       
         sub_type = next((st for st in SubscriptionType if st.value == subscription.type.strip().lower()), None)
         if not sub_type:
             raise ValueError(f"Invalid subscription type: {subscription.type}")
@@ -138,27 +134,27 @@ def purchase_subscription(subscription: SubscriptionRequest, db: Session = Depen
         print(e)
         raise HTTPException(status_code=400, detail="Invalid subscription type")
 
-    # Проверяем существование пользователя
+    
     user = db.query(User).filter(User.id == subscription.user_id).first()
     if not user:
         print(f"User with ID {subscription.user_id} not found.")
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Установка цены и описания
+    
     price = sub_type.get_price
     description = f"Подписка {sub_type.title} для VetApp"
     ticket_id = str(uuid.uuid4())
 
-    # Проверка метода оплаты
+    
     payment_method = subscription.payment_method.lower()
     if payment_method not in ["prodamus", "yookassa"]:
         raise HTTPException(status_code=400, detail="Invalid payment method")
 
-    # Генерация ссылки на оплату и сохранение данных
+    
     payment_url = None
     try:
         if payment_method == "prodamus":
-            # Параметры для ПродаМус
+            #продамус
             payload = {
                 "do": "link",
                 "order_id": ticket_id,
@@ -175,7 +171,7 @@ def purchase_subscription(subscription: SubscriptionRequest, db: Session = Depen
                 print(f"Prodamus error response: {response.text}")
                 raise Exception("Failed to generate payment URL for Prodamus")
         elif payment_method == "yookassa":
-            # Создание платежа через Yookassa
+            #юкасса
             yookassa = YookassaService()
             payment_data = yookassa.create_payment(price=price, return_url="https://yourapp.com/payment/success")
             payment_url = payment_data.get("confirmation_url")
@@ -185,7 +181,7 @@ def purchase_subscription(subscription: SubscriptionRequest, db: Session = Depen
         print(f"Error while creating payment: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate payment URL")
 
-    # Сохранение данных в payment_tracking
+    
     payment_tracking = PaymentTracking(
         ticket_id=ticket_id,
         user_id=user.id,
@@ -194,20 +190,18 @@ def purchase_subscription(subscription: SubscriptionRequest, db: Session = Depen
     )
     db.add(payment_tracking)
 
-    # Сохранение данных в users_payments
+   
     users_payment = Payment(
         user_id=user.id,
         ticket_id=ticket_id,
         payment_system=payment_method,
-        subscription_type=None,  # Тип подписки будет установлен после успешной оплаты
-        expiration_date=None     # Дата окончания будет установлена после успешной оплаты
+        subscription_type=None,  
+        expiration_date=None     
     )
     db.add(users_payment)
 
-    # Подтверждение изменений в базе данных
     db.commit()
 
-    # Возврат ссылки на оплату
     return {
         "payment_url": payment_url,
         "success_url": f"https://yourapp.com/payment/success?ticket_id={ticket_id}",
@@ -223,28 +217,27 @@ def confirm_payment(ticket_id: str, db: Session = Depends(get_db)):
     """
     Подтверждает успешную оплату подписки.
     """
-    # Находим запись платежа в таблице payment_tracking
+ 
     tracking = db.query(PaymentTracking).filter(PaymentTracking.ticket_id == ticket_id).first()
     if not tracking:
         raise HTTPException(status_code=404, detail="Tracking record not found")
 
-    # Проверяем, прошла ли уже оплата
+  
     if tracking.payment_completed:
         raise HTTPException(status_code=400, detail="Payment already confirmed for this ticket")
 
-    # Проверяем существование типа подписки
     subscription_type = tracking.subscription_type
     if not subscription_type:
         raise HTTPException(status_code=400, detail="Subscription type is not set for this ticket")
 
     try:
-        # Используем функцию для получения длительности подписки
+
         subscription_duration = get_subscription_duration(subscription_type)
         expiration_date = datetime.utcnow() + subscription_duration
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Обновляем запись в таблице users_payments
+
     payment = db.query(Payment).filter(Payment.ticket_id == ticket_id).first()
     if not payment:
         raise HTTPException(status_code=404, detail="Payment record not found in users_payments")
@@ -252,10 +245,8 @@ def confirm_payment(ticket_id: str, db: Session = Depends(get_db)):
     payment.subscription_type = subscription_type
     payment.expiration_date = expiration_date
 
-    # Обновляем запись в payment_tracking
     tracking.payment_completed = True
 
-     # Устанавливаем значения is_purchased и is_subscribed для пользователя
     user = db.query(User).filter(User.id == payment.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -293,15 +284,13 @@ def cancel_subscription(request: CancelSubscriptionRequest, db: Session = Depend
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Проверить, есть ли активная подписка
     active_payment = next(
         (p for p in user.payments if p.expiration_date and p.expiration_date > datetime.utcnow()), None
     )
     if not active_payment:
         raise HTTPException(status_code=400, detail="No active subscription to cancel")
 
-    # Деактивировать подписку
-    active_payment.expiration_date = datetime.utcnow()  # Установить дату окончания на текущий момент
+    active_payment.expiration_date = datetime.utcnow()  
     user.is_purchased = False
     user.is_subscribed = False
     db.commit()

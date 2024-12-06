@@ -31,9 +31,9 @@ class YookassaService:
                 json=payload,
                 headers=self.headers
             )
-            print("Request payload:", payload)  # Отладка запроса
-            print("Response status:", response.status_code)  # Статус ответа
-            print("Response text:", response.text)  # Тело ответа
+            # print("Request payload:", payload)  
+            # print("Response status:", response.status_code)  
+            # print("Response text:", response.text)  
             
             response.raise_for_status()
             data = response.json()

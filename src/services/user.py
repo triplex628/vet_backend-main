@@ -46,7 +46,7 @@ def get_user_subscription_status(db: Session, user_id: int):
     
     user = get_user_by_id(db, user_id)
 
-    # Проверка на пожизненную подписку
+
     active_subscription = get_active_subscription(db, user_id)
     if active_subscription and active_subscription.subscription_type == SubscriptionType.LIFETIME:
         return {
@@ -55,7 +55,7 @@ def get_user_subscription_status(db: Session, user_id: int):
             "type": "lifetime",
         }
     
-    # Проверка на обычные подписки
+
     if active_subscription:
         return {
             "active": True,

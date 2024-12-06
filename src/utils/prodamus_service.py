@@ -29,7 +29,7 @@ class ProdamusService:
         try:
             response = requests.get(ProdamusService.BASE_URL, params=payload)
             if response.status_code == 200:
-                return response.text  # Возвращаем URL на оплату
+                return response.text  
             else:
                 print(f"Error from Prodamus: {response.status_code} - {response.text}")
                 return None
