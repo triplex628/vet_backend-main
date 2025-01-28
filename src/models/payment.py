@@ -10,7 +10,8 @@ class SubscriptionType(Enum):
     HALF_YEARLY = ("half_yearly", "Полугодовая подписка", 949)
     YEARLY = ("yearly", "Годовая подписка", 1549)
     LIFETIME = ("lifetime", "Пожизненная подписка", 9999999)
-    CALCULATOR = ("calculator", "Подписка на калькулятор", 99)
+    CALCULATOR_MONTH = ("calculator_month", "Месячная подписка на калькулятор", 99)
+    CALCULATOR_YEAR = ("calculator_year", "Годовая подписка на калькулятор", 849)
 
     def __init__(self, value, title, price):
         self._value_ = value
@@ -32,11 +33,11 @@ class Payment(Base):
     expiration_date = Column(DateTime, nullable=True)
 
     def set_expiration_date(self):
-        if self.subscription_type == SubscriptionType.MONTHLY or self.subscription_type == SubscriptionType.CALCULATOR:
+        if self.subscription_type == SubscriptionType.MONTHLY or self.subscription_type == SubscriptionType.CALCULATOR_MONTH:
             self.expiration_date = datetime.utcnow() + timedelta(days=30)
         elif self.subscription_type == SubscriptionType.HALF_YEARLY:
             self.expiration_date = datetime.utcnow() + timedelta(days=182)
-        elif self.subscription_type == SubscriptionType.YEARLY:
+        elif self.subscription_type == SubscriptionType.YEARLY or self.subscription_type == SubscriptionType.CALCULATOR_YEAR:
             self.expiration_date = datetime.utcnow() + timedelta(days=365)
 
     def __repr__(self):

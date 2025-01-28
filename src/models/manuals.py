@@ -13,3 +13,13 @@ class Animal(Base):
 
     def __repr__(self):
         return f'Animal ID:{self.id} Name:{self.name}'
+
+
+
+class Manual(Base):
+    __tablename__ = "manuals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    image_url = Column(String, nullable=True)  

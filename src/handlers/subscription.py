@@ -52,7 +52,8 @@ def get_available_subscriptions(user_id: int, db: Session = Depends(database.get
                 "title": sub_type.title,
             }
             for sub_type in [
-                SubscriptionType.CALCULATOR,
+                SubscriptionType.CALCULATOR_MONTH,
+                SubscriptionType.CALCULATOR_YEAR,
             ]
         ]
     else:
@@ -251,8 +252,11 @@ def confirm_payment(ticket_id: str, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    user.is_purchased = True
-    user.is_subscribed = True
+    if payment.subscription_type == SubscriptionType.CALCULATOR_MONTH.name or payment.subscription_type == SubscriptionType.CALCULATOR_YEAR.name:
+        user.is_subscribed_calc = True
+    else:
+        user.is_purchased = True
+        user.is_subscribed = True
     db.add(user)
     db.commit()
 
@@ -265,11 +269,11 @@ def confirm_payment(ticket_id: str, db: Session = Depends(get_db)):
 
 
 def get_subscription_duration(subscription_type: str) -> timedelta:
-    if subscription_type == "MONTHLY" or subscription_type == "CALCULATOR":
+    if subscription_type == "MONTHLY" or subscription_type == "CALCULATOR_MONTH":
         return timedelta(days=30)
     elif subscription_type == "HALF_YEARLY":
         return timedelta(days=182)
-    elif subscription_type == "YEARLY":
+    elif subscription_type == "YEARLY" or subscription_type == "CALCULATOR_YEAR":
         return timedelta(days=365)
     elif subscription_type == "LIFETIME":
         return timedelta(days=999999)    

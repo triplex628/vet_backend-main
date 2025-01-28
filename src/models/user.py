@@ -13,11 +13,13 @@ class User(Base):
     is_approved = Column(Boolean, default=False)
     is_purchased = Column(Boolean, default=False)
     is_subscribed = Column(Boolean, default=False)
+    is_subscribed_calc = Column(Boolean, default=False)
     is_admin = Column(Boolean, default=False)
     uuid_access_token = Column(UUID(as_uuid=True), nullable=True, default=None, index=True)
     last_code = Column(Integer, nullable=True, default=None)
     drugs = relationship('DrugUser', back_populates='user')
     payments = relationship('Payment', back_populates='user')
+    user_payments = relationship("UserPayment", back_populates="user", cascade="all, delete-orphan")
     tracking_payments = relationship("PaymentTracking", back_populates="user")
     def __repr__(self):
         return f'User ID:{self.id} Email:{self.email} Active:{self.is_active} Purchased:{self.is_purchased} ' \
