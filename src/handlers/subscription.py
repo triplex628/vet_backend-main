@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 from src.database import get_db
 from src.schemas.subscription import SubscriptionRequest, SubscriptionResponse, SubscriptionStatus, PurchaseResponse, PaymentResponse, CancelSubscriptionRequest
@@ -174,7 +174,7 @@ def purchase_subscription(subscription: SubscriptionRequest, db: Session = Depen
         elif payment_method == "yookassa":
             #юкасса
             yookassa = YookassaService()
-            payment_data = yookassa.create_payment(price=price, return_url="https://yourapp.com/payment/success")
+            payment_data = yookassa.create_payment(price=price, return_url="http://84.252.130.98:8001/payment/success")
             payment_url = payment_data.get("confirmation_url")
             if not payment_url:
                 raise Exception("No confirmation URL in Yookassa response")
@@ -205,8 +205,6 @@ def purchase_subscription(subscription: SubscriptionRequest, db: Session = Depen
 
     return {
         "payment_url": payment_url,
-        "success_url": f"https://yourapp.com/payment/success?ticket_id={ticket_id}",
-        "failure_url": f"https://yourapp.com/payment/failure?ticket_id={ticket_id}",
         "ticket_id": ticket_id
     }
 
@@ -214,7 +212,7 @@ def purchase_subscription(subscription: SubscriptionRequest, db: Session = Depen
 
 
 @router.post("/payment/success")
-def confirm_payment(ticket_id: str, db: Session = Depends(get_db)):
+def confirm_payment(ticket_id: str = Query(...), db: Session = Depends(get_db)):
     """
     Подтверждает успешную оплату подписки.
     """
