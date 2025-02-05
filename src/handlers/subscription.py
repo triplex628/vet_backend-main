@@ -214,7 +214,7 @@ def purchase_subscription(subscription: SubscriptionRequest, db: Session = Depen
         user_id=user.id,
         ticket_id=ticket_id,
         payment_system=payment_method,
-        subscription_type=None,  # Подписка обновится после успешной оплаты
+        subscription_type=sub_type.name,  # Подписка обновится после успешной оплаты
         expiration_date=None
     )
     db.add(users_payment)
@@ -324,68 +324,72 @@ def cancel_subscription(request: CancelSubscriptionRequest, db: Session = Depend
 
 
 @router.get("/payment/status")
-def check_payment_status(ticket_id: str, db: Session = Depends(get_db)):
+def check_payment_status(user_id: int, db: Session = Depends(get_db)):
     """
-    Проверяет статус платежа по ticket_id.
+    Проверяет статус платежа по user_id, активирует подписку и устанавливает is_subscribed.
     """
-    # Проверяем, существует ли запись о платеже
-    user_payment = db.query(Payment).filter(Payment.ticket_id == ticket_id).first()
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Ищем неподтвержденный платеж
+    user_payment = (
+        db.query(Payment)
+        .filter(Payment.user_id == user_id, Payment.expiration_date.is_(None))
+        .first()
+    )
     if not user_payment:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-
-    # Проверяем, был ли платёж уже подтверждён
-    if user_payment.expiration_date is not None:
-        return {
-            "detail": "Payment already confirmed",
-            "subscription_type": user_payment.subscription_type,
-            "expiration_date": user_payment.expiration_date.isoformat()
-        }
-
-    # Получаем платёжную систему (Prodamus или Yookassa)
+        raise HTTPException(status_code=404, detail="No pending payment found")
+    
+    ticket_id = user_payment.ticket_id
     payment_system = user_payment.payment_system
-
+    
+    payment_tracking = db.query(PaymentTracking).filter(PaymentTracking.ticket_id == ticket_id).first()
+    if not payment_tracking:
+        raise HTTPException(status_code=404, detail="Payment tracking record not found")
+        
     if payment_system == "yookassa":
         yookassa = YookassaService()
         try:
             yookassa_response = yookassa.check_yookassa_payment(ticket_id)
             print("Parsed Yookassa response:", yookassa_response)
-
-            # 🔥 Добавлена проверка `paid: True`
-            if yookassa_response.get("status") == "succeeded" and yookassa_response.get("paid") == True:
+            
+            if yookassa_response.get("status") == "succeeded" and yookassa_response.get("paid") is True:
                 print(f"Payment {ticket_id} confirmed!")
-
-                # Обновляем статус в БД
-                user_payment.subscription_type = user_payment.subscription_type or "UNKNOWN"
+                
+                # Обновляем данные в БД
+                user_payment.subscription_type = user_payment.subscription_type.name
                 user_payment.expiration_date = datetime.utcnow() + get_subscription_duration(user_payment.subscription_type)
+                user.is_subscribed = True
+                payment_tracking.payment_completed = True
                 db.commit()
-
+                
                 return {
                     "detail": "Payment confirmed and subscription activated",
                     "subscription_type": user_payment.subscription_type,
                     "expiration_date": user_payment.expiration_date.isoformat()
                 }
             else:
-                print(f"Payment {ticket_id} not successful.")
                 raise HTTPException(status_code=400, detail="Payment was not successful or was cancelled.")
-
         except Exception as e:
             print("Error checking Yookassa payment:", e)
             raise HTTPException(status_code=500, detail="Failed to check payment status")
-
+    
     elif payment_system == "prodamus":
         prodamus = ProdamusService()
         try:
             prodamus_response = prodamus.check_prodamus_payment(ticket_id)
             print("Parsed Prodamus response:", prodamus_response)
-
+            
             if prodamus_response.get("status") == "paid":
                 print(f"Payment {ticket_id} confirmed!")
-
-                # Обновляем статус в БД
+                
                 user_payment.subscription_type = user_payment.subscription_type or "UNKNOWN"
                 user_payment.expiration_date = datetime.utcnow() + get_subscription_duration(user_payment.subscription_type)
+                user.is_subscribed = True
+                
                 db.commit()
-
+                
                 return {
                     "detail": "Payment confirmed and subscription activated",
                     "subscription_type": user_payment.subscription_type,
@@ -393,11 +397,9 @@ def check_payment_status(ticket_id: str, db: Session = Depends(get_db)):
                 }
             else:
                 raise HTTPException(status_code=400, detail="Payment was not successful or was cancelled.")
-
         except Exception as e:
             print("Error checking Prodamus payment:", e)
             raise HTTPException(status_code=500, detail="Failed to check payment status")
-
     else:
         raise HTTPException(status_code=400, detail="Invalid payment system")
 
