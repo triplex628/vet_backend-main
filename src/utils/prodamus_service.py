@@ -36,3 +36,26 @@ class ProdamusService:
         except Exception as e:
             print(f"Exception during Prodamus payment generation: {e}")
             return None
+
+
+    def check_prodamus_payment(ticket_id: str):
+            url = f"https://vetapp.payform.ru/api/v1/payment/{ticket_id}"  
+            headers = {
+                "Authorization": "Basic your_api_key",
+                "Content-Type": "application/json"
+            }
+
+            try:
+                response = requests.get(url, headers=headers)
+                print(f"Prodamus response status: {response.status_code}")
+                print(f"Prodamus response text: {response.text}")  
+
+                if response.status_code != 200:
+                    return {"error": f"Unexpected status code {response.status_code}"}
+
+                return response.json()  
+
+            except requests.exceptions.RequestException as e:
+                print(f"Request error: {e}")
+                return {"error": "Failed to connect to Prodamus"}
+

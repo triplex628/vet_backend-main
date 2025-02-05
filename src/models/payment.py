@@ -6,7 +6,7 @@ from sqlalchemy.orm import relationship
 from src.database import Base
 
 class SubscriptionType(Enum):
-    MONTHLY = ("monthly", "Ежемесячная подписка", 199)
+    MONTHLY = ("monthly", "Ежемесячная подписка", 1)
     HALF_YEARLY = ("half_yearly", "Полугодовая подписка", 949)
     YEARLY = ("yearly", "Годовая подписка", 1549)
     LIFETIME = ("lifetime", "Пожизненная подписка", 9999999)
