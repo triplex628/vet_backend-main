@@ -96,7 +96,7 @@ def download_image_from_url(image_url: str) -> str:
     """
     Скачивает изображение по URL и сохраняет на сервере.
     """
-    print(f"🔄 Скачиваю изображение: {image_url}")  # Отладка
+    print(f"Скачиваю изображение: {image_url}")  
     
     try:
         response = requests.get(image_url, stream=True)
@@ -105,7 +105,7 @@ def download_image_from_url(image_url: str) -> str:
         # Проверяем, является ли контент изображением
         content_type = response.headers.get("Content-Type", "")
         if not content_type.startswith("image/"):
-            print(f"❌ Ошибка: Ссылка не ведет на изображение! Content-Type: {content_type}")
+            print(f"Ошибка: Ссылка не ведет на изображение! Content-Type: {content_type}")
             return image_url  # Просто оставляем URL, если это не изображение
 
         # Определяем расширение
@@ -119,11 +119,11 @@ def download_image_from_url(image_url: str) -> str:
             for chunk in response.iter_content(1024):
                 file.write(chunk)
 
-        print(f"✅ Изображение сохранено: {file_path}")
-        return f"/{UPLOAD_DIR}/{unique_filename}"  # Локальный путь
+        print(f"Изображение сохранено: {file_path}")
+        return f"/{UPLOAD_DIR}/{unique_filename}"  
 
     except requests.RequestException as e:
-        print(f"❌ Ошибка загрузки: {e}")
+        print(f"Ошибка загрузки: {e}")
         return image_url
 
 
@@ -136,7 +136,7 @@ class ManualAdminModel(SqlAlchemyModelAdmin):
     form_fields = {
         "title": "text",
         "description": "textarea",
-        "image_url": "text",  # Вставляем URL изображения
+        "image_url": "text",  
     }
 
     db_session_maker = database.AsyncSessionLocal
@@ -145,10 +145,10 @@ class ManualAdminModel(SqlAlchemyModelAdmin):
         """
         Перед сохранением скачивает изображение по URL, если необходимо.
         """
-        print(f" Сохранение объекта: {payload}")  # Отладка
+        print(f" Сохранение объекта: {payload}")  
         
         if "image_url" in payload and payload["image_url"].startswith("http"):
-            print(f"Найден URL изображения: {payload['image_url']}")  # Отладка
+            print(f"Найден URL изображения: {payload['image_url']}")  
             payload["image_url"] = download_image_from_url(payload["image_url"])
         
         return await super().orm_save_obj(id, payload)
@@ -157,7 +157,7 @@ class ManualAdminModel(SqlAlchemyModelAdmin):
         """
         Удаляет объект из базы данных.
         """
-        print(f"🗑 Пытаюсь удалить запись с ID: {id}")  # Отладка
+        print(f"Пытаюсь удалить запись с ID: {id}") 
 
         sessionmaker = self.get_sessionmaker()
         async with sessionmaker() as session:
@@ -165,9 +165,9 @@ class ManualAdminModel(SqlAlchemyModelAdmin):
             if obj:
                 await session.delete(obj)
                 await session.commit()
-                print(f"✅ Запись {id} удалена из базы!")
+                print(f"Запись {id} удалена из базы!")
             else:
-                print(f"❌ Запись {id} не найдена в БД!")
+                print(f"Запись {id} не найдена в БД!")
 
 
 
