@@ -128,16 +128,28 @@ def partial_update_drug(db: Session, user_id: int, drug_id: int, drug: schemas.D
     # обновляем животных
     animal_ids = drug_dict.get('animals')
     if animal_ids is not None:
-        # удаляем всех животных
-        db.execute("""DELETE FROM drugs_animals WHERE drug = :drug_id""", {'drug_id': drug_id})
-        if len(animal_ids) > 0:
-            values = [{'drug_id': drug_id, 'animal_id': animal_id} for animal_id in animal_ids]
+        # Получаем текущие связи
+        existing_animals = db.execute(
+            """SELECT animal FROM drugs_animals WHERE drug = :drug_id""",
+            {'drug_id': drug_id}
+        ).fetchall()
+        
+        existing_animals = {row[0] for row in existing_animals}
+
+        # Находим новых животных, которых ещё нет в БД
+        new_animals = set(animal_ids) - existing_animals
+
+        # Добавляем только новые связи
+        values = [{'drug_id': drug_id, 'animal_id': animal_id} for animal_id in new_animals]
+        if values:
             try:
                 db.execute(text("""INSERT INTO drugs_animals (drug, animal) VALUES (:drug_id, :animal_id)"""),
-                           values)
+                        values)
             except IntegrityError:
                 raise exceptions.not_found_exception(f'Animal not found')
+
     db.commit()
+
 
 
 def set_favorite_user_drug(db: Session, user_id: int, drug_id: int, is_favorite: bool = True) -> int:

@@ -32,7 +32,7 @@ app = FastAPI()
 async def fix_payload_middleware(request: Request, call_next):
     """Middleware для исправления payload перед отправкой в FastAdmin"""
     
-    if request.method in ["POST", "PUT", "PATCH"]:  # Только для изменяющих запросов
+    if request.method in ["POST", "PUT", "PATCH"]:
         try:
             body = await request.body()
             if body:
@@ -40,9 +40,16 @@ async def fix_payload_middleware(request: Request, call_next):
 
                 # Если в payload есть animals, исправляем их
                 if "animals" in payload and isinstance(payload["animals"], list):
-                    payload["animals"] = [int(x) for x in payload["animals"] if str(x).isdigit()]
+                    fixed_animals = []
+                    for item in payload["animals"]:
+                        if isinstance(item, str):  
+                            fixed_animals.extend([int(x) for x in item.split(",") if x.isdigit()])
+                        elif isinstance(item, int):
+                            fixed_animals.append(item)
+                    
+                    payload["animals"] = fixed_animals
 
-                print(f"Fixed payload before sending to FastAdmin: {payload}")  # Лог
+                print(f"Fixed payload before sending to FastAdmin: {payload}")
 
                 # Перезаписываем тело запроса
                 async def receive():
@@ -55,6 +62,7 @@ async def fix_payload_middleware(request: Request, call_next):
 
     response = await call_next(request)
     return response
+
 
 app.include_router(api_router)
 app.include_router(subscription_router)
