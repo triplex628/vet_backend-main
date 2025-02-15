@@ -42,4 +42,4 @@ async def check_expired_subscriptions():
         except Exception as e:
             print(f"Ошибка проверки подписок: {e}")
 
-        await asyncio.sleep(3600)  
+        await asyncio.sleep(86400)  
