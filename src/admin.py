@@ -8,6 +8,10 @@ from src import database
 import os
 import uuid
 from uuid import uuid4 
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import joinedload
 
 class CustomAdminModel(SqlAlchemyModelAdmin):
     async def orm_delete_obj(self, id: int) -> None:
@@ -78,11 +82,125 @@ class AnimalAdminModel(CustomAdminModel):
 
 @register(models.Drug)
 class DrugAdminModel(CustomAdminModel):
-    list_display = ("id","name", "description", "is_global", )
+    list_display = ("id", "name", "description", "is_global")
     list_display_links = ("id", "name")
     search_fields = ("name",)
-    
+
     db_session_maker = database.AsyncSessionLocal
+
+    async def save_model(self, obj=None, request=None, data=None, *args, **kwargs):
+        """Создание или обновление лекарства с привязкой к животным"""
+
+        # 🛠 Если `data` отсутствует, пытаемся достать его из `request`
+        if data is None:
+            if isinstance(request, dict):
+                data = request  # Если передан словарь - используем его
+                print("📥 `data` передано в виде `dict` из `request`")
+            elif hasattr(request, "json"):
+                try:
+                    data = await request.json()
+                    print("📥 `data` получено из `request.json()`")
+                except Exception:
+                    raise ValueError("⚠ Ошибка: `data` отсутствует в `save_model`, и не удалось получить `request.json()`")
+
+        if data is None:
+            raise ValueError("⚠ Ошибка: `data` отсутствует даже после попытки извлечения из `request`")
+
+        print(f"📌 Итоговое `data`: {data}")
+
+        # 🛠 Обрабатываем список животных
+        animal_ids = data.get("animals", [])
+
+        # Конвертируем animals в список чисел (на случай ошибок формата)
+        if isinstance(animal_ids, list):
+            parsed_animals = []
+            for item in animal_ids:
+                if isinstance(item, str):  # Если элемент - строка, разбираем её
+                    parsed_animals.extend([int(a) for a in item.split(",") if a.strip().isdigit()])
+                elif isinstance(item, int):  # Если уже int, добавляем как есть
+                    parsed_animals.append(item)
+            animal_ids = parsed_animals  # Обновляем список
+
+        print(f"📌 Преобразованные `animal_ids`: {animal_ids}")
+
+        async with self.db_session_maker() as session:
+            async with session.begin():
+                # 🛠 Если `obj` - это ID, загружаем объект из базы
+                if isinstance(obj, int):
+                    print(f"🔍 Загрузка объекта Drug по ID {obj}")
+                    obj = await session.get(models.Drug, obj)
+
+                if obj is None:
+                    obj = models.Drug(**{k: v for k, v in data.items() if k != "animals"})
+                    session.add(obj)
+                    await session.flush()
+                    await session.refresh(obj)
+
+                print(f"🔄 Обновляем животных для препарата ID {obj.id}")
+
+                # Удаляем старые связи
+                await session.execute(
+                    text("DELETE FROM drugs_animals WHERE drug = :drug_id"),
+                    {"drug_id": obj.id}
+                )
+
+                # Проверяем существующих животных в БД
+                result = await session.execute(
+                    text("SELECT id FROM animals WHERE id = ANY(:animal_ids)"),
+                    {"animal_ids": animal_ids}
+                )
+                existing_animals = {row[0] for row in result.fetchall()}
+
+                if not existing_animals:
+                    print("❌ Ошибка: Животные не найдены в базе")
+                else:
+                    # Добавляем только существующих животных
+                    values = [{"drug_id": obj.id, "animal_id": animal_id} for animal_id in existing_animals]
+                    await session.execute(
+                        text("INSERT INTO drugs_animals (drug, animal) VALUES (:drug_id, :animal_id)"),
+                        values
+                    )
+                    print(f"✅ Добавлены связи в drugs_animals: {values}")
+
+            await session.commit()
+        return obj
+
+
+
+
+
+    async def delete_model(self, obj_id):
+        async with self.db_session_maker() as session:
+            async with session.begin():
+                # Загружаем объект препарата
+                obj = await session.get(models.Drug, obj_id)
+                if obj is None:
+                    print(f"Препарат с ID {obj_id} не найден")
+                    return False
+
+                print(f"🗑 Удаляем препарат ID {obj_id}")
+
+                # Удаляем связи из drugs_animals
+                await session.execute(
+                    text("DELETE FROM drugs_animals WHERE drug = :drug_id"),
+                    {"drug_id": obj_id}
+                )
+                print("✅ Удалены связи в drugs_animals")
+
+                # Удаляем связи из drugs_users
+                await session.execute(
+                    text("DELETE FROM drugs_users WHERE drug_id = :drug_id"),
+                    {"drug_id": obj_id}
+                )
+                print("✅ Удалены связи в drugs_users")
+
+                # Удаляем сам препарат
+                await session.delete(obj)
+                print("🗑 Препарат удален")
+
+            await session.commit()
+            return True
+
 
 
 
