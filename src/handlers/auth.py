@@ -11,6 +11,7 @@ router = APIRouter()
 
 @router.post("/create", response_model=schemas.Token)
 def login_for_access_token(db: Session = Depends(database.get_db), form_data: OAuth2PasswordRequestForm = Depends()):
+    print("запрос на авторизацию")
     email = services.auth.authenticate_user(db, form_data.username, form_data.password)
     if email is None:
         raise exceptions.credentials_exception

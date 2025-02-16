@@ -32,7 +32,7 @@ app = FastAPI()
 async def fix_payload_middleware(request: Request, call_next):
     """Middleware для исправления payload перед отправкой в FastAdmin"""
     
-    if request.method in ["POST", "PUT", "PATCH"]:
+    if request.method in ["PATCH"]:
         try:
             body = await request.body()
             if body:
