@@ -91,7 +91,7 @@ class DrugAdminModel(CustomAdminModel):
     async def save_model(self, obj=None, request=None, data=None, *args, **kwargs):
         """Создание или обновление лекарства с привязкой к животным"""
 
-        # 🛠 Если `data` отсутствует, пытаемся достать его из `request`
+        # 🛠 Извлекаем `data` если передано через `request`
         if data is None:
             if isinstance(request, dict):
                 data = request  # Если передан словарь - используем его
@@ -135,6 +135,14 @@ class DrugAdminModel(CustomAdminModel):
                     session.add(obj)
                     await session.flush()
                     await session.refresh(obj)
+                else:
+                    # 🛠 **Обновляем поля лекарства**
+                    for key, value in data.items():
+                        if key != "animals":  # Не перезаписываем животных напрямую
+                            setattr(obj, key, value)
+
+                    session.add(obj)  # Добавляем обновлённый объект в сессию
+                    print(f"✅ Обновлены данные препарата ID {obj.id}: {data}")
 
                 print(f"🔄 Обновляем животных для препарата ID {obj.id}")
 
@@ -164,6 +172,7 @@ class DrugAdminModel(CustomAdminModel):
 
             await session.commit()
         return obj
+
 
 
 
