@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session, joinedload
 from src.database import get_db
 from src.schemas.subscription import SubscriptionRequest, SubscriptionResponse, SubscriptionStatus, PurchaseResponse, PaymentResponse, CancelSubscriptionRequest
@@ -6,7 +6,7 @@ from src.models.payment import SubscriptionType, Payment, PaymentTracking
 from src.repositories.user import get_user_by_id
 from datetime import datetime
 from src.models.user import User
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from src import database
 import uuid
 import requests
@@ -403,3 +403,57 @@ def check_payment_status(user_id: int, db: Session = Depends(get_db)):
     else:
         raise HTTPException(status_code=400, detail="Invalid payment system")
 
+
+
+router = APIRouter()
+
+@router.post("/revenuecat/webhook")
+async def revenuecat_webhook(request: Request, db: Session = Depends(get_db)):
+    payload = await request.json()
+    event_type = payload.get("event", None)
+    user_id = payload.get("app_user_id", None)
+
+    if not user_id:
+        raise HTTPException(status_code=400, detail="User ID not provided")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if event_type == "INITIAL_PURCHASE" or event_type == "RENEWAL":
+        expiration_date_str = payload.get("expiration_at")
+        expiration_date = datetime.fromisoformat(expiration_date_str).replace(tzinfo=timezone.utc)
+        user.is_subscribed = True
+
+        VALID_SUBSCRIPTIONS = {
+            "premium_monthly": "MONTHLY",
+            "premium_half_yearly": "HALF_YEARLY",
+            "premium_yearly": "YEARLY",
+            "calculator_monthly": "CALCULATOR_MONTH",
+            "calculator_yearly": "CALCULATOR_YEAR",
+        }
+
+        subscription_type_raw = payload.get("product_id")
+        subscription_type = VALID_SUBSCRIPTIONS.get(subscription_type_raw)
+
+        if not subscription_type:
+            raise HTTPException(status_code=400, detail=f"Invalid subscription type: {subscription_type_raw}")
+
+        payment = Payment(
+            user_id=user.id,
+            payment_system="RevenueCat",
+            subscription_type=subscription_type, 
+            expiration_date=expiration_date
+        )
+
+        db.add(payment)
+        db.commit()
+
+        return {"message": "Subscription activated"}
+
+    elif event_type == "CANCELLATION":
+        user.is_subscribed = False
+        db.commit()
+        return {"message": "Subscription cancelled"}
+
+    return {"message": "Event processed"}
