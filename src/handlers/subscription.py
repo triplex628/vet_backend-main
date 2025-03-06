@@ -429,6 +429,9 @@ async def revenuecat_webhook(request: Request, db: Session = Depends(get_db)):
             "premium_monthly": "MONTHLY",
             "premium_half_yearly": "HALF_YEARLY",
             "premium_yearly": "YEARLY",
+            "monthly": "MONTHLY",
+            "half_yearly": "HALF_YEARLY",
+            "yearly": "YEARLY",
             "calculator_monthly": "CALCULATOR_MONTH",
             "calculator_yearly": "CALCULATOR_YEAR",
         }
