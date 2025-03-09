@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 async def revenuecat_webhook(request: Request, db: Session = Depends(get_db)):
     payload = await request.json()
     logger.info(f"Received RevenueCat webhook payload: {payload}")
-    print(f"Received RevenueCat webhook payload: {payload}")
+    print(f"RECEIVED RevenueCat WEBHOOK PAYLOAD: {payload}")
     event_type = payload.get("event", None)
     user_id = payload.get("app_user_id", None)
 
