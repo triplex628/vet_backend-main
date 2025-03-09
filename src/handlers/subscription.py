@@ -407,17 +407,25 @@ def check_payment_status(user_id: int, db: Session = Depends(get_db)):
 
 router = APIRouter()
 
+logging.basicConfig(level=logging.INFO)
+
+logger = logging.getLogger(__name__)
+
 @router.post("/revenuecat/webhook")
 async def revenuecat_webhook(request: Request, db: Session = Depends(get_db)):
     payload = await request.json()
+    logger.info(f"Received RevenueCat webhook payload: {payload}")
+    print(f"Received RevenueCat webhook payload: {payload}")
     event_type = payload.get("event", None)
     user_id = payload.get("app_user_id", None)
 
     if not user_id:
+        logger.warning("User ID not provided in payload")
         raise HTTPException(status_code=400, detail="User ID not provided")
 
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
+        logger.warning(f"User not found: {user_id}")
         raise HTTPException(status_code=404, detail="User not found")
 
     if event_type == "INITIAL_PURCHASE" or event_type == "RENEWAL":
@@ -440,6 +448,7 @@ async def revenuecat_webhook(request: Request, db: Session = Depends(get_db)):
         subscription_type = VALID_SUBSCRIPTIONS.get(subscription_type_raw)
 
         if not subscription_type:
+            logger.error(f"Invalid subscription type: {subscription_type_raw}")
             raise HTTPException(status_code=400, detail=f"Invalid subscription type: {subscription_type_raw}")
 
         payment = Payment(
@@ -451,12 +460,17 @@ async def revenuecat_webhook(request: Request, db: Session = Depends(get_db)):
 
         db.add(payment)
         db.commit()
-
-        return {"message": "Subscription activated"}
+        
+        logger.info(f"Subscription activated for user {user.id}: {subscription_type}, expires on {expiration_date}")
+        return {"message": "Subscription activated", "user_id": user.id, "subscription_type": subscription_type, "expiration_date": expiration_date.isoformat()}
 
     elif event_type == "CANCELLATION":
         user.is_subscribed = False
         db.commit()
-        return {"message": "Subscription cancelled"}
+        logger.info(f"Subscription cancelled for user {user.id}")
+        return {"message": "Subscription cancelled", "user_id": user.id}
 
-    return {"message": "Event processed"}
+    logger.info(f"Event processed: {event_type}")
+    return {"message": "Event processed", "event_type": event_type}
+
+
