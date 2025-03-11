@@ -1,21 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy.orm import Session, joinedload
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy.orm import Session
 from src.database import get_db
-from src.schemas.subscription import SubscriptionRequest, SubscriptionResponse, SubscriptionStatus, PurchaseResponse, PaymentResponse, CancelSubscriptionRequest
-from src.models.payment import SubscriptionType, Payment, PaymentTracking
-from src.repositories.user import get_user_by_id
-from datetime import datetime
+from src.models.payment import Payment
 from src.models.user import User
-from datetime import datetime, timedelta, timezone
-from src import database
-import uuid
-import requests
-from typing import List
-from src.utils.yookassa_service import YookassaService
-from src.utils.prodamus_service import ProdamusService
-from fastapi.responses import JSONResponse
+from datetime import datetime, timezone
 import json
 import logging
+
 router = APIRouter()
 
 logging.basicConfig(level=logging.INFO)
