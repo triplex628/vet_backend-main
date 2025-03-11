@@ -1,8 +1,8 @@
 from typing import Any
-from fastapi import APIRouter, File, UploadFile, HTTPException
+from fastapi import APIRouter, File, UploadFile, HTTPException, Request
 from fastadmin import SqlAlchemyModelAdmin, register
 import requests
-from sqlalchemy import text
+from sqlalchemy import text, delete
 from src import models
 from src import database
 import os
@@ -12,6 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
+from src.models.manuals import manuals_animals_association
+from sqlalchemy.orm import selectinload
+import json
+from src.models.groups import Group
 
 class CustomAdminModel(SqlAlchemyModelAdmin):
     async def orm_delete_obj(self, id: int) -> None:
@@ -257,28 +261,67 @@ def download_image_from_url(image_url: str) -> str:
 
 @register(models.Manual)
 class ManualAdminModel(SqlAlchemyModelAdmin):
-    list_display = ("id", "title", "description", "image_url")
-    list_display_links = ("id", "title")
-    search_fields = ("title",)
+    list_display = ("id", "name", "description", "image_url", "group_id", "animals")
+    list_display_links = ("id", "name")
+    search_fields = ("name",)
     form_fields = {
-        "title": "text",
+        "name": "text",
         "description": "textarea",
         "image_url": "text",  
+        "group_id": "foreign_key",  
+        "animals": "many_to_many",
     }
 
     db_session_maker = database.AsyncSessionLocal
+  
+
+    async def orm_save_m2m_ids(self, obj, field_name, values):
+
+        if field_name == "animals":
+            cleaned_values = []
+
+            for v in values:
+                if isinstance(v, str):  
+                    numbers = [num.strip() for num in v.split(",") if num.strip().isdigit()]
+                    cleaned_values.extend(numbers)
+                elif isinstance(v, int): 
+                    cleaned_values.append(v)
+
+            try:
+                cleaned_values = [int(v) for v in cleaned_values] 
+
+            except ValueError:
+                print(f"Ошибка: `animals` содержит не числа: {cleaned_values}")
+                raise ValueError("Animals ID must be integers")
+
+            values = cleaned_values  # ✅ Заменяем `values` исправленными числами
+
+        await super().orm_save_m2m_ids(obj, field_name, values)
 
     async def orm_save_obj(self, id: int, payload: dict):
         """
         Перед сохранением скачивает изображение по URL, если необходимо.
         """
+
         print(f" Сохранение объекта: {payload}")  
         
         if "image_url" in payload and payload["image_url"].startswith("http"):
             print(f"Найден URL изображения: {payload['image_url']}")  
             payload["image_url"] = download_image_from_url(payload["image_url"])
         
+        if "group_id" in payload:
+            try:
+                payload["group_id"] = int(payload["group_id"])  # ✅ Преобразуем в число
+                print(f"✅ `group_id` преобразован в int: {payload['group_id']}")
+            except ValueError:
+                print(f"❌ Ошибка: `group_id` не является числом: {payload['group_id']}")
+                raise ValueError("`group_id` должен быть числом!")
+        
         return await super().orm_save_obj(id, payload)
+
+
+
+
     
     async def orm_delete_obj(self, id: int):
         """
@@ -311,3 +354,15 @@ async def admin_upload_manual_image(file: UploadFile = File(...)):
         f.write(file.file.read())
 
     return {"file_path": f"/static/uploads/admin/{file_name}"}
+
+
+@register(Group)
+class GroupAdminModel(SqlAlchemyModelAdmin):
+    list_display = ("id", "name")
+    list_display_links = ("id", "name")
+    search_fields = ("name",)
+    form_fields = {
+        "name": "text"
+    }
+
+    db_session_maker = database.AsyncSessionLocal

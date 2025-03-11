@@ -1,15 +1,22 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy.orm import Session
 from src.database import get_db
 from src.models.manuals import Manual
 from src.schemas.manual import ManualCreate, ManualResponse
 import os
 from uuid import uuid4
+from typing import List, Optional
+from collections import defaultdict
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from src.models.groups import Group
+
 
 router = APIRouter()
 
 UPLOAD_DIR = "static/uploads/admin"
-os.makedirs(UPLOAD_DIR, exist_ok=True)  # Создаем папку, если её нет
+os.makedirs(UPLOAD_DIR, exist_ok=True)  
 
 @router.post("/admin/manuals/download-image")
 async def download_manual_image(image_url: str):
@@ -18,31 +25,30 @@ async def download_manual_image(image_url: str):
     """
     try:
         response = requests.get(image_url, stream=True)
-        response.raise_for_status()  # Проверяем, что URL доступен
+        response.raise_for_status()  
 
-        # Определяем расширение файла
+       
         content_type = response.headers.get("Content-Type", "")
         extension = content_type.split("/")[-1] if "image" in content_type else "jpg"
         
-        # Генерируем уникальное имя файла
+        
         unique_filename = f"{uuid4()}.{extension}"
         file_path = os.path.join(UPLOAD_DIR, unique_filename)
 
-        # Сохраняем файл
+       
         with open(file_path, "wb") as file:
             for chunk in response.iter_content(1024):
                 file.write(chunk)
 
-        # Возвращаем URL загруженного изображения
+        
         local_image_url = f"/{UPLOAD_DIR}/{unique_filename}"
         return {"image_url": local_image_url}
 
     except requests.RequestException as e:
         raise HTTPException(status_code=400, detail=f"Ошибка при скачивании: {str(e)}")
 
-# Эндпоинт для создания полезного материала
+
 @router.post("/admin/manuals", response_model=ManualResponse)
-@router.post("/admin/manuals")
 async def create_manual(manual: ManualCreate, db: Session = Depends(get_db)):
     """
     Создание Manual, скачивая изображение перед сохранением, если передан URL.
@@ -52,7 +58,7 @@ async def create_manual(manual: ManualCreate, db: Session = Depends(get_db)):
         manual.image_url = image_data["image_url"]
 
     new_manual = Manual(
-        title=manual.title,
+        name=manual.name,
         description=manual.description,
         image_url=manual.image_url
     )
@@ -62,3 +68,73 @@ async def create_manual(manual: ManualCreate, db: Session = Depends(get_db)):
     db.refresh(new_manual)
     return new_manual
 
+@router.get("/manuals")
+def get_manuals(db: Session = Depends(get_db)):
+    """Возвращает список manuals"""
+    manuals = db.query(Manual).all()
+
+    grouped_manuals: Dict[str, List[Dict]] = defaultdict(list)
+
+    for manual in manuals:
+        group_id = manual.group_id 
+        grouped_manuals[group_id].append({
+            "id": manual.id,
+            "name": manual.name,
+            "description": manual.description,
+            "imageUrl": manual.image_url,
+            "animals": [{"id": animal.id, "name": animal.name} for animal in manual.animals]
+        })
+
+    return [{"group": group, "items": items} for group, items in grouped_manuals.items()]
+
+
+@router.get("/manuals/group/{group_id}")
+def get_manuals_by_group(group_id: int, db: Session = Depends(get_db)):
+    """Получает записи только из указанной группы"""
+    manuals = db.query(Manual).filter(Manual.group_id == group_id).all()
+
+    return [
+        {
+            "id": manual.id,
+            "name": manual.name,
+            "description": manual.description,
+            "imageUrl": manual.image_url,
+            "animals": [{"id": animal.id, "name": animal.name} for animal in manual.animals]
+        }
+        for manual in manuals
+    ]
+
+
+class GroupResponse(BaseModel):
+    id: int
+    name: str
+
+@router.get("/groups", response_model=List[GroupResponse])
+def get_groups(db: Session = Depends(get_db)):  
+
+    groups = db.query(Group).order_by(Group.id).all()  
+
+    return [{"id": g.id, "name": g.name} for g in groups]
+
+@router.get("/manuals/search", response_model=List[ManualResponse])
+def search_manuals(query: Optional[str] = None, db: Session = Depends(get_db)):
+
+    stmt = select(Manual).order_by(Manual.id)
+    if query:
+        stmt = stmt.filter(Manual.name.ilike(f"%{query}%"))
+
+    manuals = db.execute(stmt).scalars().all()
+
+    # Корректируем структуру для Pydantic
+    response = []
+    for manual in manuals:
+        response.append({
+            "id": manual.id,
+            "name": manual.name,  # ✅ Используем `name`
+            "description": manual.description,
+            "imageUrl": manual.image_url,
+            "group_id": manual.group_id,
+            "animals": [{"id": animal.id, "name": animal.name} for animal in manual.animals]  # ✅ Корректируем animals
+        })
+
+    return response

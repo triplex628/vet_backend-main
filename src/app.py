@@ -15,6 +15,8 @@ from fastadmin import fastapi_app as admin_app
 from src import admin
 from src.handlers.subscription import router as subscription_router
 from src.handlers.revenue import router as revenuecat_router 
+from src.handlers import admin_manual 
+from src.handlers.admin_manual import router as admin_manual_router
 logging.basicConfig(level=logging.DEBUG)
 
 #Логирование SQL-запросов
@@ -67,6 +69,7 @@ async def fix_payload_middleware(request: Request, call_next):
 app.include_router(api_router)
 app.include_router(subscription_router)
 app.include_router(revenuecat_router)
+app.include_router(admin_manual_router)
 app.mount("/admin", admin_app)
 
 

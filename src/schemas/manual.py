@@ -1,16 +1,29 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import List, Optional
 
 class ManualBase(BaseModel):
-    title: str
+    name: str
     description: Optional[str]
 
 class ManualCreate(ManualBase):
-    image_url: Optional[str]
+    name: str
+    description: Optional[str]
+    imageUrl: Optional[str]
+    group_name: Optional[str]
+    animals: List[int] 
 
+class AnimalResponse(BaseModel):
+    id: int
+    name: str
+    
 class ManualResponse(ManualBase):
     id: int
-    image_url: Optional[str]
+    name: str
+    description: Optional[str]
+    imageUrl: Optional[str]
+    group_id: Optional[int]
+    animals: List[AnimalResponse]
 
     class Config:
         orm_mode = True
+
