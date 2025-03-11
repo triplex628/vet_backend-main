@@ -14,7 +14,7 @@ from typing import List
 from src.utils.yookassa_service import YookassaService
 from src.utils.prodamus_service import ProdamusService
 from fastapi.responses import JSONResponse
-
+import json
 import logging
 router = APIRouter()
 
@@ -22,66 +22,69 @@ logging.basicConfig(level=logging.INFO)
 
 logger = logging.getLogger(__name__)
 
+
+SUBSCRIPTION_MAPPING = {
+    "va_m_199": "MONTHLY",
+    "va_m_6": "HALF_YEARLY",
+    "va_m_12": "YEARLY",
+    "calculator_1": "CALCULATOR_MONTH",
+    "calculator_12": "CALCULATOR_YEAR",
+}
+
 @router.post("/revenuecat/webhook")
 async def revenuecat_webhook(request: Request, db: Session = Depends(get_db)):
-    payload = await request.json()
-    logger.info(f"Received RevenueCat webhook payload: {payload}")
-    print(f"RECEIVED RevenueCat WEBHOOK PAYLOAD: {payload}")
-    event_type = payload.get("event", None)
-    user_id = payload.get("app_user_id", None)
+    try:
+        data = await request.json()
+        logger.info(f"RECEIVED RevenueCat WEBHOOK PAYLOAD:\n{json.dumps(data, indent=2)}")
 
-    if not user_id:
-        logger.warning("User ID not provided in payload")
-        raise HTTPException(status_code=400, detail="User ID not provided")
+        event_data = data.get("event", {})
+        app_user_id = event_data.get("original_app_user_id")  
+        product_id = event_data.get("product_id")
+        expiration_at_ms = event_data.get("expiration_at_ms")
+        
+        if not app_user_id:
+            raise HTTPException(status_code=400, detail="Missing app_user_id in webhook data")
 
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        logger.warning(f"User not found: {user_id}")
-        raise HTTPException(status_code=404, detail="User not found")
+        expiration_at = datetime.utcfromtimestamp(expiration_at_ms / 1000).replace(tzinfo=timezone.utc) if expiration_at_ms else None
 
-    if event_type == "INITIAL_PURCHASE" or event_type == "RENEWAL":
-        expiration_date_str = payload.get("expiration_at")
-        expiration_date = datetime.fromisoformat(expiration_date_str).replace(tzinfo=timezone.utc)
+        subscription_type = SUBSCRIPTION_MAPPING.get(product_id, "UNKNOWN")
+        if subscription_type == "UNKNOWN":
+            raise HTTPException(status_code=400, detail=f"Unknown subscription type for product_id: {product_id}")
+
+        logger.info(f"User ID: {app_user_id}, Subscription Type: {subscription_type}")
+
+        user = db.query(User).filter(User.revenuecat_id == app_user_id).first()
+
+        if not user:
+            logger.error(f"User with RevenueCat ID {app_user_id} not found in DB")
+            raise HTTPException(status_code=404, detail=f"User with RevenueCat ID {app_user_id} not found")
+
+        payment = db.query(Payment).filter(Payment.user_id == user.id, Payment.payment_system == "RevenueCat").first()
+
+        if payment:
+            payment.subscription_type = subscription_type
+            payment.expiration_date = expiration_at
+        else:
+            new_payment = Payment(
+                user_id=user.id,
+                payment_system="RevenueCat",
+                subscription_type=subscription_type,
+                expiration_date=expiration_at
+            )
+            db.add(new_payment)
+
         user.is_subscribed = True
-
-        VALID_SUBSCRIPTIONS = {
-            "premium_monthly": "MONTHLY",
-            "premium_half_yearly": "HALF_YEARLY",
-            "premium_yearly": "YEARLY",
-            "monthly": "MONTHLY",
-            "half_yearly": "HALF_YEARLY",
-            "yearly": "YEARLY",
-            "calculator_monthly": "CALCULATOR_MONTH",
-            "calculator_yearly": "CALCULATOR_YEAR",
-        }
-
-        subscription_type_raw = payload.get("product_id")
-        subscription_type = VALID_SUBSCRIPTIONS.get(subscription_type_raw)
-
-        if not subscription_type:
-            logger.error(f"Invalid subscription type: {subscription_type_raw}")
-            raise HTTPException(status_code=400, detail=f"Invalid subscription type: {subscription_type_raw}")
-
-        payment = Payment(
-            user_id=user.id,
-            payment_system="RevenueCat",
-            subscription_type=subscription_type, 
-            expiration_date=expiration_date
-        )
-
-        db.add(payment)
         db.commit()
         
-        logger.info(f"Subscription activated for user {user.id}: {subscription_type}, expires on {expiration_date}")
-        return {"message": "Subscription activated", "user_id": user.id, "subscription_type": subscription_type, "expiration_date": expiration_date.isoformat()}
+        return {"status": "success", "message": "Subscription updated"}
 
-    elif event_type == "CANCELLATION":
-        user.is_subscribed = False
-        db.commit()
-        logger.info(f"Subscription cancelled for user {user.id}")
-        return {"message": "Subscription cancelled", "user_id": user.id}
+    except HTTPException as http_exc:
+        logger.error(f"HTTP ERROR: {http_exc.detail}")
+        raise http_exc
+    except Exception as e:
+        logger.error(f"INTERNAL ERROR: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
-    logger.info(f"Event processed: {event_type}")
-    return {"message": "Event processed", "event_type": event_type}
+
 
 

@@ -15,6 +15,7 @@ class User(Base):
     is_subscribed = Column(Boolean, default=False)
     is_subscribed_calc = Column(Boolean, default=False)
     is_admin = Column(Boolean, default=False)
+    revenuecat_id = Column(String, nullable=True, default=None, index=True)
     uuid_access_token = Column(UUID(as_uuid=True), nullable=True, default=None, index=True)
     last_code = Column(Integer, nullable=True, default=None)
     drugs = relationship('DrugUser', back_populates='user')
