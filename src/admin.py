@@ -366,3 +366,16 @@ class GroupAdminModel(SqlAlchemyModelAdmin):
     }
 
     db_session_maker = database.AsyncSessionLocal
+
+    async def orm_delete_obj(self, id: int):
+        """Удаление группы вместе со связанными записями"""
+        sessionmaker = self.get_sessionmaker()
+        async with sessionmaker() as session:
+            # Проверяем, есть ли такая группа
+            group = await session.get(Group, id)
+            if group:
+                await session.delete(group)  # ✅ Удаляем группу
+                await session.commit()
+                print(f"✅ Группа {id} удалена!")
+            else:
+                print(f"❌ Группа {id} не найдена!")
