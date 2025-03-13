@@ -22,6 +22,7 @@ class ManualResponse(ManualBase):
     description: Optional[str]
     imageUrl: Optional[str]
     group_id: Optional[int]
+    group_name: Optional[str]
     animals: List[AnimalResponse]
 
     class Config:

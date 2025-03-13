@@ -11,7 +11,7 @@ from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, Session
 from src.models.manuals import manuals_animals_association
 from sqlalchemy.orm import selectinload
 import json

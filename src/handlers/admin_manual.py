@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
+import requests
 from sqlalchemy.orm import Session
 from src.database import get_db
 from src.models.manuals import Manual
 from src.schemas.manual import ManualCreate, ManualResponse
 import os
 from uuid import uuid4
-from typing import List, Optional
+from typing import Dict, List, Optional
 from collections import defaultdict
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -76,8 +77,9 @@ def get_manuals(db: Session = Depends(get_db)):
     grouped_manuals: Dict[str, List[Dict]] = defaultdict(list)
 
     for manual in manuals:
-        group_id = manual.group_id 
-        grouped_manuals[group_id].append({
+        
+        group_name = manual.group_name
+        grouped_manuals[group_name].append({
             "id": manual.id,
             "name": manual.name,
             "description": manual.description,
@@ -85,7 +87,7 @@ def get_manuals(db: Session = Depends(get_db)):
             "animals": [{"id": animal.id, "name": animal.name} for animal in manual.animals]
         })
 
-    return [{"group": group, "items": items} for group, items in grouped_manuals.items()]
+    return [{"group_name": group, "items": items} for group, items in grouped_manuals.items()]
 
 
 @router.get("/manuals/group/{group_id}")
@@ -125,16 +127,16 @@ def search_manuals(query: Optional[str] = None, db: Session = Depends(get_db)):
 
     manuals = db.execute(stmt).scalars().all()
 
-    # Корректируем структуру для Pydantic
+
     response = []
     for manual in manuals:
         response.append({
             "id": manual.id,
-            "name": manual.name,  # ✅ Используем `name`
+            "name": manual.name, 
             "description": manual.description,
             "imageUrl": manual.image_url,
             "group_id": manual.group_id,
-            "animals": [{"id": animal.id, "name": animal.name} for animal in manual.animals]  # ✅ Корректируем animals
+            "animals": [{"id": animal.id, "name": animal.name} for animal in manual.animals]  
         })
 
     return response
