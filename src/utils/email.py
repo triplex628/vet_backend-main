@@ -8,8 +8,8 @@ conf = ConnectionConfig(
     MAIL_PORT=get_settings().mail_port,
     MAIL_SERVER=get_settings().mail_server,
     MAIL_FROM_NAME=get_settings().mail_from_name,
-    MAIL_TLS=True,
-    MAIL_SSL=False,
+    MAIL_TLS=False,
+    MAIL_SSL=True,
     USE_CREDENTIALS=True,
 )
 
