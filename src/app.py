@@ -17,6 +17,7 @@ from src.handlers.subscription import router as subscription_router
 from src.handlers.revenue import router as revenuecat_router 
 from src.handlers import admin_manual 
 from src.handlers.admin_manual import router as admin_manual_router
+from src.test_email import router as test_email_router
 logging.basicConfig(level=logging.DEBUG)
 
 #Логирование SQL-запросов
@@ -70,6 +71,7 @@ app.include_router(api_router)
 app.include_router(subscription_router)
 app.include_router(revenuecat_router)
 app.include_router(admin_manual_router)
+app.include_router(test_email_router)
 app.mount("/admin", admin_app)
 
 
