@@ -63,8 +63,11 @@ async def revenuecat_webhook(request: Request, db: Session = Depends(get_db)):
                 expiration_date=expiration_at
             )
             db.add(new_payment)
-
-        user.is_subscribed = True
+        if subscription_type == "CALCULATOR_MONTH" or subscription_type == "CALCULATOR_YEAR":
+            user.is_subscribed_calc = True
+        else:
+            user.is_subscribed = True
+            user.is_subscribed_calc = True
         db.commit()
         
         return {"status": "success", "message": "Subscription updated"}

@@ -3,6 +3,8 @@ import random
 from sqlalchemy.orm import Session
 from src import repositories
 from src import schemas
+from src.models.payment import SubscriptionType
+from src.repositories.user import get_user_by_id
 from src.utils import email
 
 

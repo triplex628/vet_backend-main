@@ -276,6 +276,7 @@ def confirm_payment(ticket_id: str = Query(...), db: Session = Depends(get_db)):
     else:
         user.is_purchased = True
         user.is_subscribed = True
+        user.is_subscribed_calc = True
     db.add(user)
     db.commit()
 
@@ -361,6 +362,7 @@ def check_payment_status(user_id: int, db: Session = Depends(get_db)):
                 user_payment.subscription_type = user_payment.subscription_type.name
                 user_payment.expiration_date = datetime.utcnow() + get_subscription_duration(user_payment.subscription_type)
                 user.is_subscribed = True
+                user.is_subscribed_calc = True
                 payment_tracking.payment_completed = True
                 db.commit()
                 
@@ -387,6 +389,7 @@ def check_payment_status(user_id: int, db: Session = Depends(get_db)):
                 user_payment.subscription_type = user_payment.subscription_type or "UNKNOWN"
                 user_payment.expiration_date = datetime.utcnow() + get_subscription_duration(user_payment.subscription_type)
                 user.is_subscribed = True
+                user.is_subscribed_calc = True
                 
                 db.commit()
                 
