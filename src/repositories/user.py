@@ -26,14 +26,16 @@ def get_user_with_password_by_email(db: Session, email: str) -> Optional[schemas
 def get_user_by_email(db: Session, email: str) -> Optional[schemas.User]:
     result = db.execute(
         text(
-            """SELECT id, email, is_active, is_purchased, is_admin, is_subscribed, is_approved 
+            """SELECT id, email, is_active, is_purchased, is_admin, is_subscribed, is_approved, is_subscribed_calc 
             FROM users WHERE email = :email"""),
         {'email': email}).mappings().first()
     if result is None:
         return None
+
+    print("User query result:", result)
     return schemas.User(id=result.get('id'), email=result.get('email'), is_purchased=result.get('is_purchased'),
                         is_admin=result.get('is_admin'), is_active=result.get('is_active'),
-                        is_subscribed=result.get('is_subscribed'), is_approved=result.get('is_approved'))
+                        is_subscribed=result.get('is_subscribed'), is_approved=result.get('is_approved'), is_subscribed_calc=result.get('is_subscribed_calc'))
 
 
 def create_user(db: Session, user: schemas.UserCreate) -> schemas.User | None:

@@ -13,6 +13,7 @@ class User(UserBase):
     is_subscribed: bool
     is_admin: bool = False
     is_approved: bool = False
+    is_subscribed_calc: bool = False
 
 
 class UserCreate(UserBase):
