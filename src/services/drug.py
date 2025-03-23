@@ -3,8 +3,12 @@ from src import repositories
 from src import schemas
 
 
-def get_global_drugs_with_favorite(db: Session, user: schemas.User) -> list[schemas.Drug]:
-    return repositories.get_all_global_drugs_with_favorite(db, user.id)
+def get_global_drugs_with_favorite(db: Session, user: schemas.User | None) -> list[schemas.Drug]:
+    if user:
+        return repositories.get_all_global_drugs_with_favorite(db, user.id)
+    else:
+        return repositories.get_all_global_drugs(db)
+
 
 
 def set_favorite_global_drug(db: Session, user: schemas.User, drug_id: int, is_favorite: bool = True):

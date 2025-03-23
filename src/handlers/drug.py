@@ -10,9 +10,9 @@ router = APIRouter()
 
 
 @router.get('/global', response_model=list[schemas.Drug], status_code=status.HTTP_200_OK)
-def get_global_drugs_for_user(db: Session = Depends(database.get_db),
-                              user: schemas.User = Depends(dependencies.get_current_active_user)):
-    return services.drug.get_global_drugs_with_favorite(db, user)
+def get_global_drugs_for_user(db: Session = Depends(database.get_db)):
+                              #user: schemas.User = Depends(dependencies.get_current_active_user)):
+    return services.drug.get_global_drugs_with_favorite(db, None)
 
 
 @router.patch('/favorite_global/{drug_id}', status_code=status.HTTP_200_OK)
