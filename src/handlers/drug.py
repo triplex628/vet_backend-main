@@ -2,17 +2,21 @@ from fastapi import APIRouter, Depends, Body, status, Path, Query
 from sqlalchemy.orm import Session
 from src import schemas
 from src import services
-from src import database
+from src import database, repositories
 from src.utils import exceptions
 from . import dependencies
 
+
 router = APIRouter()
 
+@router.get('/all_global', response_model=list[schemas.Drug], status_code=status.HTTP_200_OK)
+def get_all_global_drugs_for_user(db: Session = Depends(database.get_db)):
+    return repositories.drug.get_all_global_drugs(db)
 
 @router.get('/global', response_model=list[schemas.Drug], status_code=status.HTTP_200_OK)
-def get_global_drugs_for_user(db: Session = Depends(database.get_db)):
-                              #user: schemas.User = Depends(dependencies.get_current_active_user)):
-    return services.drug.get_global_drugs_with_favorite(db, None)
+def get_global_drugs_for_user(db: Session = Depends(database.get_db),
+                              user: schemas.User = Depends(dependencies.get_current_active_user)):
+    return services.drug.get_global_drugs_with_favorite(db, user)
 
 
 @router.patch('/favorite_global/{drug_id}', status_code=status.HTTP_200_OK)
