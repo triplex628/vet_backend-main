@@ -84,7 +84,8 @@ def get_manuals(db: Session = Depends(get_db)):
             "name": manual.name,
             "description": manual.description,
             "imageUrl": manual.image_url,
-            "animals": [{"id": animal.id, "name": animal.name} for animal in manual.animals]
+            "animals": [{"id": animal.id, "name": animal.name} for animal in manual.animals],
+            "emoji": manual.emoji
         })
 
     return [{"group_name": group, "items": items} for group, items in grouped_manuals.items()]

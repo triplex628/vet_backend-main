@@ -33,6 +33,7 @@ class Manual(Base):
     image_url = Column(String, nullable=True)  
     group_id = Column(Integer, ForeignKey("groups.id"), nullable=True)
     group_name = Column(String, nullable=True)
+    emoji = Column(String, nullable=True)
     group = relationship("Group", backref="manuals")
     animals = relationship("Animal", secondary=manuals_animals_association, back_populates="manuals")
     
