@@ -6,6 +6,7 @@ class Group(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True)
+    emoji = Column(String)
 
     def __str__(self):
         return self.name 

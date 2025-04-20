@@ -358,8 +358,8 @@ async def admin_upload_manual_image(file: UploadFile = File(...)):
 
 @register(Group)
 class GroupAdminModel(SqlAlchemyModelAdmin):
-    list_display = ("id", "name")
-    list_display_links = ("id", "name")
+    list_display = ("id", "name", "emoji")
+    list_display_links = ("id", "name", "emoji")
     search_fields = ("name",)
     form_fields = {
         "name": "text"
