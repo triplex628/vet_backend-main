@@ -69,17 +69,33 @@ async def create_manual(manual: ManualCreate, db: Session = Depends(get_db)):
     db.refresh(new_manual)
     return new_manual
 
+from collections import defaultdict
+
 @router.get("/manuals")
 def get_manuals(db: Session = Depends(get_db)):
-    """Возвращает список manuals"""
+    """Возвращает список manuals, сгруппированных по group_name, с emoji из groups"""
+    
+    # Загружаем все группы один раз
+    groups = db.query(Group).all()
+    group_emojis = {group.name: group.emoji for group in groups}
+
+    # Загружаем все manuals
     manuals = db.query(Manual).all()
 
-    grouped_manuals: Dict[str, List[Dict]] = defaultdict(list)
+    grouped_manuals: Dict[str, Dict] = {}
 
     for manual in manuals:
-        
         group_name = manual.group_name
-        grouped_manuals[group_name].append({
+        group_emoji = group_emojis.get(group_name, "")
+
+        if group_name not in grouped_manuals:
+            grouped_manuals[group_name] = {
+                "group_name": group_name,
+                "emoji_group": group_emoji,
+                "items": []
+            }
+
+        grouped_manuals[group_name]["items"].append({
             "id": manual.id,
             "name": manual.name,
             "description": manual.description,
@@ -88,7 +104,8 @@ def get_manuals(db: Session = Depends(get_db)):
             "emoji": manual.emoji
         })
 
-    return [{"group_name": group, "items": items} for group, items in grouped_manuals.items()]
+    return list(grouped_manuals.values())
+
 
 
 @router.get("/manuals/group/{group_id}")
