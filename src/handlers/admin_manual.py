@@ -73,14 +73,14 @@ from collections import defaultdict
 
 @router.get("/manuals")
 def get_manuals(db: Session = Depends(get_db)):
-    """Возвращает список manuals, сгруппированных по group_name, с emoji из groups"""
+    """Возвращает список manuals, сгруппированных по group_name"""
     
     # Загружаем все группы один раз
     groups = db.query(Group).all()
     group_emojis = {group.name: group.emoji for group in groups}
 
     # Загружаем все manuals
-    manuals = db.query(Manual).all()
+    manuals = db.query(Manual).order_by(Manual.id).all()
 
     grouped_manuals: Dict[str, Dict] = {}
 
