@@ -34,6 +34,7 @@ class Manual(Base):
     group_id = Column(Integer, ForeignKey("groups.id"), nullable=True)
     group_name = Column(String, nullable=True)
     emoji = Column(String, nullable=True)
+    is_free = Column(Boolean, default=False, nullable=False)
     group = relationship("Group", backref="manuals")
     animals = relationship("Animal", secondary=manuals_animals_association, back_populates="manuals")
     

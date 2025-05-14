@@ -101,7 +101,8 @@ def get_manuals(db: Session = Depends(get_db)):
             "description": manual.description,
             "imageUrl": manual.image_url,
             "animals": [{"id": animal.id, "name": animal.name} for animal in manual.animals],
-            "emoji": manual.emoji
+            "emoji": manual.emoji,
+            "is_free": manual.is_free
         })
 
     return list(grouped_manuals.values())
